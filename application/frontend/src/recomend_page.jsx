@@ -3,19 +3,23 @@ import custardChouxImage from './assets/unnamed.jpg'
 import cheeseHashImage from './assets/unnamed (1).jpg'
 import crispyChickenImage from './assets/unnamed (2).jpg'
 
-const recomendItems = [
-  {
-    id: 'custard-choux',
-    name: 'とろけるカスタードシュー',
-    description: '割った瞬間、クリームがあふれる。',
-    price: 158,
-    reason: '甘さ控えめのクリームで食後のデザートに最適。',
-    image: custardChouxImage,
-    alt: 'とろけるカスタードシューの写真',
-  },
-]
+const productImages = {
+  'custard-choux': custardChouxImage,
+  'cheese-hash': cheeseHashImage,
+  'crispy-chicken': crispyChickenImage,
+}
 
-function RecomendPage() {
+function RecomendPage({ product }) {
+  if (!product) {
+    return null
+  }
+
+  const item = {
+    ...product,
+    image: productImages[product.image] || product.image,
+    reason: product.reason || '今の気分にぴったりの一品です。',
+  }
+
   return (
     <div className="recommend-page">
       <header className="recommend-page__header">
@@ -23,9 +27,7 @@ function RecomendPage() {
         <h1 className="recommend-page__title">今日のレコメンド</h1>
       </header>
       <section className="recommend-grid">
-        {recomendItems.map((item) => (
-          <RecomendCard key={item.id} {...item} />
-        ))}
+        <RecomendCard {...item} />
       </section>
     </div>
   )

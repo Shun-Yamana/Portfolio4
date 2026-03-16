@@ -22,5 +22,21 @@
     "description": "割った瞬間、クリームがあふれる。",
     "image": "custard-choux",
     "alt": "とろけるカスタードシューの写真"
+  },
+  {
+    "id": "spicy-nuggets",
+    "name": "スパイシーナゲット",
+    "price": 228,
+    "description": "ピリ辛でクセになる。",
+    "image": "crispy-chicken",
+    "alt": "スパイシーナゲットの写真"
+  },
+  {
+    "id": "maple-donut",
+    "name": "メープルドーナツ",
+    "price": 178,
+    "description": "甘い香りがふわっと広がる。",
+    "image": "custard-choux",
+    "alt": "メープルドーナツの写真"
   }
 ]
