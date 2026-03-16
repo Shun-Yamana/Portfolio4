@@ -4,6 +4,8 @@ import { useState } from 'react'
 import ProductsPage from './Products_page'
 import './index.css'
 import RecomendPage from './recomend_page'
+import MoodsPage from './moods_page'
+import './moods.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
