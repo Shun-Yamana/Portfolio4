@@ -1,4 +1,4 @@
-function ProductsCard({ name, price, description, image, alt }) {
+function ProductsCard({ name, price, description, image, alt, onConsider, onChoose }) {
   return (
     <article className="product-card">
       <div className="product-card__image-wrap">
@@ -15,10 +15,18 @@ function ProductsCard({ name, price, description, image, alt }) {
         <p className="product-card__price">価格：{price}円</p>
         <p className="product-card__note">{description}</p>
         <div className="product-card__actions">
-          <button className="product-card__button product-card__button--ghost" type="button">
+          <button
+            className="product-card__button product-card__button--ghost"
+            type="button"
+            onClick={onConsider}
+          >
             気になる！
           </button>
-          <button className="product-card__button product-card__button--solid" type="button">
+          <button
+            className="product-card__button product-card__button--solid"
+            type="button"
+            onClick={onChoose}
+          >
             これにする！
           </button>
         </div>

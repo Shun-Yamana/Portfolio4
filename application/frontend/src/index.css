@@ -48,6 +48,15 @@ button {
   font-weight: 700;
 }
 
+.products-page__error {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: #ffe7e0;
+  color: #7a2a1d;
+  border: 1px solid #f2b7aa;
+}
+
 .products-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(220px, 1fr));
