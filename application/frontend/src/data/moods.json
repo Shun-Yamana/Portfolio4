@@ -1,0 +1,17 @@
+[
+  { "id": "sweet", "name": "甘い" },
+  { "id": "salty", "name": "しょっぱい" },
+  { "id": "refreshing", "name": "さっぱり" },
+  { "id": "rich", "name": "こってり" },
+  { "id": "snack", "name": "小腹" },
+  { "id": "heavy", "name": "がっつり" },
+  { "id": "tired", "name": "疲れた" },
+  { "id": "energize", "name": "元気出したい" },
+  { "id": "light", "name": "軽い" },
+  { "id": "warm", "name": "温かい" },
+  { "id": "cold", "name": "冷たい" },
+  { "id": "healthy", "name": "ヘルシー" },
+  { "id": "junk", "name": "ジャンク" },
+  { "id": "reward", "name": "ご褒美" },
+  { "id": "morning", "name": "朝向き" }
+]
