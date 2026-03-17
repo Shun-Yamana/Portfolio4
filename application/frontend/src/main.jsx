@@ -14,11 +14,21 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 
 function AppRoot() {
+  const [selectedMood, setSelectedMood] = useState(null)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
   if (selectedProduct) {
     return <RecomendPage product={selectedProduct} />
   }
 
-  return <ProductsPage onChoose={setSelectedProduct} />
+  if (selectedMood) {
+    return (
+      <ProductsPage 
+        mood={selectedMood} 
+        onChoose={setSelectedProduct} 
+      />
+    )
+  }
+
+  return <MoodsPage onChoose={setSelectedMood} />
 }

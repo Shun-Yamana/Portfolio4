@@ -54,3 +54,38 @@
   font-weight: bold;
   color: #1e293b;
 }
+
+/* --- 選択済みのカードのデザイン（追加） --- */
+.mood-card.is-selected {
+  background-color: #f1f5f9; /* 少しグレーがかった色に */
+  border-color: #cbd5e1; /* 枠線を落ち着いた色に */
+  box-shadow: none; /* 影をなくして、押された（沈んだ）感を出す */
+  transform: translateY(2px); /* 物理的に少し下げる */
+  opacity: 0.6; /* 全体的に少し薄暗く（透明に）する */
+}
+
+/* 選択済みのカードはホバーしても浮き上がらないように上書き */
+.mood-card.is-selected:hover {
+  border-color: #cbd5e1;
+  transform: translateY(2px);
+  box-shadow: none;
+}
+
+/* --- 次へボタンのデザイン（追加） --- */
+.moods-page__next-btn {
+  margin-top: 40px;
+  padding: 12px 48px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #ffffff;
+  background-color: #3b82f6; /* 鮮やかな青 */
+  border: none;
+  border-radius: 30px; /* 角を丸く */
+  cursor: pointer;
+  transition: background-color 0.2s;
+  box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);
+}
+
+.moods-page__next-btn:hover {
+  background-color: #2563eb; /* ホバーで少し濃い青に */
+}
