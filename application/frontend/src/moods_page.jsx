@@ -20,8 +20,11 @@ function MoodsPage({ onChoose }) {
   // 【追加】「次へ」ボタンが押された時の処理
   const handleNext = () => {
     if (selectedMoods.length > 0) {
+      const moodTags = moods
+        .filter((m) => selectedMoods.includes(m.id))
+        .map((m) => m.name);
       // 1つ以上選ばれていたら、親(main.jsx)にデータを渡して画面遷移
-      onChoose(selectedMoods);
+      onChoose(moodTags);
     } else {
       alert("気分を1つ以上選択してください");
     }

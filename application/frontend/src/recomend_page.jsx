@@ -16,8 +16,8 @@ function RecomendPage({ product }) {
 
   const item = {
     ...product,
-    image: productImages[product.image] || product.image,
-    reason: product.reason || '今の気分にぴったりの一品です。',
+    image: productImages[product.image] || custardChouxImage,
+    reason: product.reason || product.ai_comment || '今の気分にぴったりの一品です。',
   }
 
   return (
