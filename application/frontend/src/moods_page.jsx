@@ -18,15 +18,29 @@ function MoodsPage({ onChoose }) {
   };
 
   // 【追加】「次へ」ボタンが押された時の処理
-  const handleNext = () => {
-    if (selectedMoods.length > 0) {
-      const moodTags = moods
-        .filter((m) => selectedMoods.includes(m.id))
-        .map((m) => m.name);
-      // 1つ以上選ばれていたら、親(main.jsx)にデータを渡して画面遷移
-      onChoose(moodTags);
-    } else {
+  const handleNext = async () => {
+    if (selectedMoods.length === 0) {
       alert("気分を1つ以上選択してください");
+      return;
+    }
+
+    const moodTags = moods
+      .filter((m) => selectedMoods.includes(m.id))
+      .map((m) => m.name);
+
+    try {
+      const response = await fetch('http://localhost:8000/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ moods: moodTags }),
+      });
+
+      if (!response.ok) throw new Error('商品の取得に失敗しました');
+
+      const recommendedProducts = await response.json();
+      onChoose(recommendedProducts);
+    } catch (error) {
+      alert("エラーが発生しました: " + error.message);
     }
   };
 
