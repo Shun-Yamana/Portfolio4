@@ -16,43 +16,51 @@ function MoodsPage({ onChoose }) {
   };
 
   // 【追加】「次へ」ボタンが押された時の処理
-  const handleNext = () => {
-    if (selectedMoods.length === 0) {
   const handleNext = async () => {
-    if (selectedMoods.length > 0) {
-      try {
-        // バックエンドに選択された気分の配列を送信
-        const response = await fetch('http://localhost:8000/products', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ moods: selectedMoods }),
-        });
-
-        if (!response.ok) {
-          throw new Error('商品の取得に失敗しました');
-        }
-
-        // バックエンドでの計算結果（おすすめ商品リスト）を受け取る
-        const recommendedProducts = await response.json();
-        
-        // 受け取った商品リストを親(main.jsx)に渡して画面遷移
-        onChoose(recommendedProducts);
-        
-      } catch (error) {
-        alert("エラーが発生しました: " + error.message);
-      }
-    } else {
+    if (selectedMoods.length === 0) {
       alert("気分を1つ以上選択してください");
       return;
     }
 
-    const moodTags = moods
-      .filter((m) => selectedMoods.includes(m.id))
-      .map((m) => m.name);
+    try {
+      // 選択された気分IDから、対応する気分名を取得
+      const moodTags = moods
+        .filter((m) => selectedMoods.includes(m.id))
+        .map((m) => m.name);
 
-    onChoose(moodTags);
+      // バックエンドの /api/mood エンドポイントに気分タグを送信
+      const response = await fetch('http://localhost:5000/api/mood', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          mood_tags: moodTags,
+          store_id: 1 
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('商品の取得に失敗しました');
+      }
+
+      // バックエンドからのレスポンスデータを受け取る
+      const data = await response.json();
+      
+      // 親(main.jsx)に渡すデータを作成
+      // ProductsPage が必要なデータを渡す
+      onChoose({
+        moodTags: moodTags,
+        initialCandidates: data.candidates || [],
+        userVector: data.user_vector || [],
+        cycle: data.cycle || 1,
+        maxCycles: data.max_cycles || 3,
+        noMatchOption: Boolean(data.no_match_option),
+      });
+      
+    } catch (error) {
+      alert("エラーが発生しました: " + error.message);
+    }
   };
 
   return (
