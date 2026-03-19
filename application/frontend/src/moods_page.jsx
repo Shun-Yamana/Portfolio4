@@ -15,6 +15,9 @@ function MoodsPage({ onChoose }) {
     }
   };
 
+  // 【追加】「次へ」ボタンが押された時の処理
+  const handleNext = () => {
+    if (selectedMoods.length === 0) {
   const handleNext = async () => {
     if (selectedMoods.length > 0) {
       try {
@@ -42,7 +45,14 @@ function MoodsPage({ onChoose }) {
       }
     } else {
       alert("気分を1つ以上選択してください");
+      return;
     }
+
+    const moodTags = moods
+      .filter((m) => selectedMoods.includes(m.id))
+      .map((m) => m.name);
+
+    onChoose(moodTags);
   };
 
   return (
