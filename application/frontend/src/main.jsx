@@ -14,23 +14,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 )
 
 function AppRoot() {
-  // 【修正】気分ではなく、取得した「商品リスト(products)」を保存するように変更
-  const [fetchedProducts, setFetchedProducts] = useState(null)
+  // 【修正】気分データ（複数の情報を含む）を保存するように変更
+  const [moodData, setMoodData] = useState(null)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
   if (selectedProduct) {
     return <RecomendPage product={selectedProduct} />
   }
 
-  // 商品リストが存在すれば ProductsPage を表示
-  if (fetchedProducts) {
+  // 気分データが存在すれば ProductsPage を表示
+  if (moodData) {
     return (
       <ProductsPage 
-        initialProducts={fetchedProducts} // 取得済みのデータを渡す
+        initialData={moodData}
         onChoose={setSelectedProduct} 
       />
     )
   }
 
-  return <MoodsPage onChoose={setFetchedProducts} />
+  return <MoodsPage onChoose={setMoodData} />
 }

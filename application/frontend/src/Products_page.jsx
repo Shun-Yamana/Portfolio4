@@ -10,7 +10,7 @@ const productImages = {
   'crispy-chicken': custardChouxImage,
 }
 
-function ProductsPage({ mood, onChoose }) {
+function ProductsPage({ initialData, onChoose }) {
   const [products, setProducts] = useState([])
   const [userVector, setUserVector] = useState([])
   const [cycle, setCycle] = useState(1)
@@ -23,51 +23,17 @@ function ProductsPage({ mood, onChoose }) {
   const API_BASE = 'http://localhost:5000/api'
 
   useEffect(() => {
-    let isMounted = true
-
-    const fetchCandidatesByMood = async () => {
-      setLoading(true)
-      try {
-        const response = await fetch(`${API_BASE}/mood`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            mood_tags: mood,
-            store_id: 1,
-          }),
-        })
-        if (!response.ok) {
-          throw new Error('初回候補の取得に失敗しました。')
-        }
-        const data = await response.json()
-        if (isMounted) {
-          setProducts(data.candidates || [])
-          setUserVector(data.user_vector || [])
-          setCycle(data.cycle || 1)
-          setMaxCycles(data.max_cycles || 3)
-          setNoMatchOption(Boolean(data.no_match_option))
-          setSelectedIds([])
-          setError('')
-        }
-      } catch (e) {
-        if (isMounted) {
-          setError('初回候補の取得に失敗しました。バックエンドを起動してください。')
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
+    // initialData から初期化
+    if (initialData) {
+      setProducts(initialData.initialCandidates || [])
+      setUserVector(initialData.userVector || [])
+      setCycle(initialData.cycle || 1)
+      setMaxCycles(initialData.maxCycles || 3)
+      setNoMatchOption(Boolean(initialData.noMatchOption))
+      setSelectedIds([])
+      setError('')
     }
-
-    fetchCandidatesByMood()
-
-    return () => {
-      isMounted = false
-    }
-  }, [mood])
+  }, [])
 
   const handleSelect = async (product) => {
     setLoading(true)
