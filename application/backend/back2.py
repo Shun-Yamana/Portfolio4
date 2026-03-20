@@ -556,6 +556,24 @@ def generate_ai_comment(user_vector, chosen_product):
 
 
 # ── APIルート ─────────────────────────────────────
+@app.route("/api/login", methods=["POST"])
+def login():
+    """
+    フロント→バック: { user_id: 1 }
+    バック→フロント: { message: "success", user_id: 1 }
+    """
+    body = request.get_json(silent=True) or {}
+    user_id = body.get("user_id")
+
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    # ゆくゆくはここでデータベースと照合したり、
+    # ユーザーごとの過去の履歴をロードしたりする処理が入ります
+    return jsonify({
+        "message": "Login successful",
+        "user_id": user_id
+    })
 
 @app.route("/api/mood", methods=["POST"])
 def mood():
