@@ -5,11 +5,21 @@ import os
 import boto3
 import datetime
 from flask import Flask, request, jsonify
-from flask_cors import CORS 
+from flask_cors import CORS
 from boto3.dynamodb.conditions import Key
 
 app = Flask(__name__)
-CORS(app)   
+# CORS(app)
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True,
+     methods=["GET", "POST", "OPTIONS", "PATCH", "PUT", "DELETE"],
+     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-CSRFToken", "Accept"])
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PATCH, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-CSRFToken, Accept"
+    return response
 
 # ── 定数 ──────────────────────────────────────────
 VECTOR_MAX           = 10

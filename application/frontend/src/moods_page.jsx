@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import MoodsCard from './components/moods_card';
-import moods from './data/moods.json';
+import { useState } from "react";
+import MoodsCard from "./components/moods_card";
+import moods from "./data/moods.json";
 
 function MoodsPage({ onChoose }) {
   const [selectedMoods, setSelectedMoods] = useState([]);
@@ -8,7 +8,7 @@ function MoodsPage({ onChoose }) {
   const toggleMood = (mood) => {
     if (selectedMoods.includes(mood.id)) {
       // すでに選ばれていたら、リストから外す
-      setSelectedMoods(selectedMoods.filter(id => id !== mood.id));
+      setSelectedMoods(selectedMoods.filter((id) => id !== mood.id));
     } else {
       // まだ選ばれていなければ、リストに追加する
       setSelectedMoods([...selectedMoods, mood.id]);
@@ -29,24 +29,24 @@ function MoodsPage({ onChoose }) {
         .map((m) => m.name);
 
       // バックエンドの /api/mood エンドポイントに気分タグを送信
-      const response = await fetch('http://localhost:5000/api/mood', {
-        method: 'POST',
+      const response = await fetch("http://127.0.0.1:5000/api/mood", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           mood_tags: moodTags,
-          store_id: 1 
+          store_id: 1,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('商品の取得に失敗しました');
+        throw new Error("商品の取得に失敗しました");
       }
 
       // バックエンドからのレスポンスデータを受け取る
       const data = await response.json();
-      
+
       // 親(main.jsx)に渡すデータを作成
       // ProductsPage が必要なデータを渡す
       onChoose({
@@ -57,7 +57,6 @@ function MoodsPage({ onChoose }) {
         maxCycles: data.max_cycles || 3,
         noMatchOption: Boolean(data.no_match_option),
       });
-      
     } catch (error) {
       alert("エラーが発生しました: " + error.message);
     }
@@ -68,9 +67,11 @@ function MoodsPage({ onChoose }) {
       <header className="moods-page__header">
         <h1 className="moods-page__title">今の気分は？</h1>
         {/* 文言を少し変更 */}
-        <p className="moods-page__subtitle">当てはまるものを選択してください（複数選択可）</p>
+        <p className="moods-page__subtitle">
+          当てはまるものを選択してください（複数選択可）
+        </p>
       </header>
-      
+
       <section className="moods-list">
         {moods.map((mood) => (
           <MoodsCard
