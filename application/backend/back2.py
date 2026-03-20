@@ -556,6 +556,20 @@ def generate_ai_comment(user_vector, chosen_product):
 
 
 # ── APIルート ─────────────────────────────────────
+@app.route("/api/users", methods=["GET"])
+def get_users():
+    """
+    バック→フロント: [{ "id": 1, "name": "ユーザーA" }, { "id": 2, "name": "ユーザーB" }]
+    """
+    # ゆくゆくはDynamoDB等からユーザー情報を取得する処理に変更します
+    users = [
+        {"id": 1, "name": "ユーザーA"},
+        {"id": 2, "name": "ユーザーB"},
+        {"id": 3, "name": "ユーザーC"}
+    ]
+    return jsonify(users)
+
+'''
 @app.route("/api/login", methods=["POST"])
 def login():
     """
@@ -573,6 +587,29 @@ def login():
     return jsonify({
         "message": "Login successful",
         "user_id": user_id
+    })
+'''
+@app.route("/api/login", methods=["POST"])
+def login():
+    """
+    フロント→バック: { user_id: 1, name: "ユーザーA" }
+    バック→フロント: { message: "success", user_id: 1, name: "ユーザーA" }
+    """
+    body = request.get_json(silent=True) or {}
+    user_id = body.get("user_id")
+    name = body.get("name") # 【追加】フロントから送られた名前を取得
+
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+
+    # ゆくゆくはここでデータベースと照合したり、
+    # ユーザーごとの過去の履歴をロードしたりする処理が入ります
+    print(f"ログインリクエストを受け付けました: ID={user_id}, 名前={name}")
+
+    return jsonify({
+        "message": "Login successful",
+        "user_id": user_id,
+        "name": name # 【追加】レスポンスにも名前を含めて返す
     })
 
 @app.route("/api/mood", methods=["POST"])
