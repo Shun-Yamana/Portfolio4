@@ -5,7 +5,7 @@ import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key
 
-logger = logging.getLogger(name)
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 ORDER_HISTORY_TABLE_NAME = os.environ.get("TABLE_ORDER_HISTORY", "order_history")
