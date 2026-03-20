@@ -10,6 +10,8 @@ from boto3.dynamodb.conditions import Key
 
 app = Flask(__name__)
 CORS(app)   
+import logging
+logger = logging.getLogger(__name__)
 
 # ── 定数 ──────────────────────────────────────────
 VECTOR_MAX           = 10
@@ -127,7 +129,8 @@ def get_in_stock_products(store_id=1):
                 item["vector"] = list(item.get("vector", []))
                 products.append(item)
         return products if products else PRODUCTS
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error accessing DynamoDB: {str(e)}", exc_info=True)
         return PRODUCTS
 
 def recommend(user_vector, products, exclude_ids=None, n=CANDIDATES_PER_CYCLE, temperature=2.0, mh_steps=100):
