@@ -20,7 +20,7 @@ function ProductsPage({ initialData, onChoose }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const API_BASE = 'http://localhost:5000/api'
+  const API_BASE = '/api'
 
   useEffect(() => {
     // initialData から初期化

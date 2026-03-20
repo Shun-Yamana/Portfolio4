@@ -29,7 +29,7 @@ function MoodsPage({ onChoose }) {
         .map((m) => m.name);
 
       // バックエンドの /api/mood エンドポイントに気分タグを送信
-      const response = await fetch('http://localhost:5000/api/mood', {
+      const response = await fetch('/api/mood', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
