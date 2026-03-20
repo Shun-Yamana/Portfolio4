@@ -20,6 +20,11 @@ except Exception as e:
     app = None
 
 
+import logging
+logger = logging.getLogger()
+logger.setLevel(logging.ERROR)
+
+
 def handler(event, context):
     try:
         if app is None:
@@ -58,9 +63,6 @@ def handler(event, context):
                 "body": resp_body,
             }
     except Exception as e:
-        import logging
-        logger = logging.getLogger()
-        logger.setLevel(logging.ERROR)
         logger.error(f"Handler exception: {str(e)}")
         logger.error(traceback.format_exc())
         return {
