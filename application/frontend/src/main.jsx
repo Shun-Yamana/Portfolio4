@@ -7,6 +7,7 @@ import RecomendPage from './recomend_page'
 import MoodsPage from './moods_page'
 import './moods.css'
 import RoleSelectionPage from './roleSelection_page' // 【追加】インポート
+import HistoryPage from './History_page' // 【追加】履歴ページをインポート
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -55,6 +56,22 @@ function AppRoot() {
     }
   }
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab)
+    if (tab === 'mood') {
+      // 気分タブを押し直したら、最初からやり直せるようにリセット
+      setSelectedProduct(null)
+      setMoodData(null)
+    } else if (tab === 'history') {
+      // 履歴を見る時は、選択中の商品をクリア
+      setSelectedProduct(null)
+    }
+  }
+
+  const handleChooseProduct = (product) => {
+    setSelectedProduct(product)
+    setActiveTab('mood') // 履歴から選んだ場合も、タブの見た目をメインに戻す
+  }
   // 最初に役割選択画面を表示
   if (!role) {
     return <RoleSelectionPage onSelectRole={handleSelectRole} />
@@ -74,7 +91,7 @@ function AppRoot() {
   const renderUserContent = () => {
     // 履歴タブの場合
     if (activeTab === 'history') {
-      return <HistoryPage user={currentUser} />
+      return <HistoryPage user={currentUser} onChoose={handleChooseProduct} />
     }
 
     // 気分タブの場合
@@ -105,13 +122,13 @@ function AppRoot() {
       <nav className="bottom-nav">
         <button 
           className={`nav-btn ${activeTab === 'mood' ? 'active' : ''}`}
-          onClick={() => setActiveTab('mood')}
+          onClick={() => handleTabChange('mood')}
         >
           気分
         </button>
         <button 
           className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
+          onClick={() => handleTabChange('history')}
         >
           履歴
         </button>

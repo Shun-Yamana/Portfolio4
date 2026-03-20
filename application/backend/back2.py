@@ -612,6 +612,7 @@ def login():
         "name": name # 【追加】レスポンスにも名前を含めて返す
     })
 
+
 @app.route("/api/mood", methods=["POST"])
 def mood():
     """
@@ -757,6 +758,41 @@ def admin_inventory():
                 "stock_status": calc_stock_status(stock),
             })
         return jsonify({"updated": updated, "warning": "DynamoDB未接続のためローカルのみ更新"})
+
+@app.route("/api/history", methods=["GET"])
+def get_history():
+    """
+    フロント→バック: GET /api/history?user_id=1
+    バック→フロント: { history: [ { 商品データ1 }, { 商品データ2 } ] }
+    """
+    user_id = request.args.get("user_id")
+    
+    if not user_id:
+        return jsonify({"error": "user_id is required"}), 400
+        
+    # ゆくゆくはDynamoDBの履歴テーブルから取得しますが、今回はモックデータを返します
+    mock_history = []
+    if str(user_id) == "1":
+        # ユーザーAの履歴（ティラミス、バニラアイス）
+        mock_history = [PRODUCTS[1], PRODUCTS[11]]
+    elif str(user_id) == "2":
+        # ユーザーBの履歴（チョココロネ）
+        mock_history = [PRODUCTS[0]]
+    else:
+        # その他のユーザー（濃厚チーズケーキ、アップルパイ）
+        mock_history = [PRODUCTS[3], PRODUCTS[4]]
+        
+    # API用にデータを整形して返す
+    formatted_history = []
+    for p in mock_history:
+        item = product_to_json(p)
+        # 履歴っぽく見せるため、仮の購入日時を追加
+        item["purchased_at"] = "2026-03-20 14:30" 
+        formatted_history.append(item)
+        
+    return jsonify({"history": formatted_history})
+
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
