@@ -37,14 +37,27 @@ function AppRoot() {
 }
 */
 
+
 function AppRoot() {
   const [role, setRole] = useState(null) // 'user' | 'admin' | null
+  const [currentUser, setCurrentUser] = useState(null) // 【追加】現在ログインしているユーザー情報
+
+  const [activeTab, setActiveTab] = useState('mood') // 【追加】'mood' | 'history'
+
   const [moodData, setMoodData] = useState(null)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
+  // 役割とユーザー情報を受け取るハンドラー
+  const handleSelectRole = (selectedRole, userId, userName) => {
+    setRole(selectedRole)
+    if (selectedRole === 'user') {
+      setCurrentUser({ id: userId, name: userName })
+    }
+  }
+
   // 最初に役割選択画面を表示
   if (!role) {
-    return <RoleSelectionPage onSelectRole={setRole} />
+    return <RoleSelectionPage onSelectRole={handleSelectRole} />
   }
 
   // 管理者が選ばれた場合の仮画面
@@ -57,19 +70,52 @@ function AppRoot() {
     )
   }
 
-  // ===== これ以降はユーザー向けのフロー =====
-  if (selectedProduct) {
-    return <RecomendPage product={selectedProduct} />
+  // ===== ユーザー向けのコンテンツ部分（タブによって切り替え） =====
+  const renderUserContent = () => {
+    // 履歴タブの場合
+    if (activeTab === 'history') {
+      return <HistoryPage user={currentUser} />
+    }
+
+    // 気分タブの場合
+    if (selectedProduct) {
+      return <RecomendPage product={selectedProduct} />
+    }
+
+    if (moodData) {
+      return (
+        <ProductsPage 
+          initialData={moodData}
+          onChoose={setSelectedProduct} 
+        />
+      )
+    }
+
+    return <MoodsPage onChoose={setMoodData} />
   }
 
-  if (moodData) {
-    return (
-      <ProductsPage 
-        initialData={moodData}
-        onChoose={setSelectedProduct} 
-      />
-    )
-  }
-
-  return <MoodsPage onChoose={setMoodData} />
+  return (
+   <div className="app-container">
+      {/* クラス名を付与してCSSで余白を管理します */}
+      <div className="main-content">
+        {renderUserContent()}
+      </div>
+      
+      {/* ボトムナビゲーション */}
+      <nav className="bottom-nav">
+        <button 
+          className={`nav-btn ${activeTab === 'mood' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mood')}
+        >
+          気分
+        </button>
+        <button 
+          className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('history')}
+        >
+          履歴
+        </button>
+      </nav>
+    </div>
+  )
 }

@@ -59,7 +59,8 @@ function RoleSelectionPage({ onSelectRole }) {
       const data = await response.json();
       console.log('ログイン成功:', data);
 
-      onSelectRole('user', selectedUserId);
+      //onSelectRole('user', selectedUserId);
+      onSelectRole('user', selectedUserId, selectedUser.name);
 
     } catch (err) {
       alert("通信エラーが発生しました: " + err.message);
