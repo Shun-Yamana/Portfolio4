@@ -19,7 +19,7 @@ function AppRoot() {
   const [selectedProduct, setSelectedProduct] = useState(null)
 
   if (selectedProduct) {
-    return <RecomendPage product={selectedProduct} />
+    return <RecomendPage product={selectedProduct} moodTags={moodData?.moodTags || []} />
   }
 
   // 気分データが存在すれば ProductsPage を表示
