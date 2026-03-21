@@ -1,3 +1,4 @@
+'''
 import json
 import random
 import math
@@ -7,9 +8,363 @@ import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS 
 from boto3.dynamodb.conditions import Key
-from user import get_all_users
-from inventory import get_inventory_from_db, update_inventory_to_db # ← これを追加
-from userhistory import get_order_history_by_user_id # ← これを追加
+
+app = Flask(__name__)
+CORS(app)   
+import logging
+logger = logging.getLogger(__name__)
+
+# ── 定数 ──────────────────────────────────────────
+VECTOR_MAX           = 10
+MAX_CYCLES           = 3
+CANDIDATES_PER_CYCLE = 3
+
+TAGS = [
+    "甘い", "苦い", "酸っぱい", "さっぱり", "濃厚",
+    "フルーティ", "ミルキー", "香ばしい", "スパイシー", "チョコ",
+    "ナッツ", "キャラメル", "クリーミー", "軽い", "重い",
+    "温かい", "冷たい", "爽やか", "リッチ", "デザート",
+]
+TAG_INDEX = {tag: i for i, tag in enumerate(TAGS)}
+
+PRODUCTS = [
+    {"id": "choco-cornet",     "name": "チョココロネ",     "price": 138, "category": "パン",
+     "description": "甘いチョコクリームたっぷりのパン。",
+     "image": "choco-cornet",  "alt": "チョココロネの写真",
+     "vector": [8,0,0,0,5,0,4,3,0,8,0,2,5,2,5,3,0,0,5,8]},
+    {"id": "tiramisu",         "name": "ティラミス",       "price": 298, "category": "デザート",
+     "description": "コーヒーとマスカルポーネが溶け合う濃厚スイーツ。",
+     "image": "tiramisu",      "alt": "ティラミスの写真",
+     "vector": [7,6,0,0,8,0,6,0,0,5,0,5,8,0,7,0,0,0,9,9]},
+    {"id": "lemon-tart",       "name": "レモンタルト",     "price": 248, "category": "デザート",
+     "description": "さわやかな酸味とサクサクタルト生地が絶妙。",
+     "image": "lemon-tart",    "alt": "レモンタルトの写真",
+     "vector": [5,0,8,6,0,7,0,0,0,0,0,0,2,6,0,0,5,8,0,8]},
+    {"id": "cheesecake",       "name": "濃厚チーズケーキ", "price": 248, "category": "デザート",
+     "description": "なめらかで濃厚なチーズケーキ。",
+     "image": "cheesecake",    "alt": "濃厚チーズケーキの写真",
+     "vector": [6,0,2,0,9,0,7,0,0,0,0,0,9,0,6,0,0,0,9,9]},
+    {"id": "apple-pie",        "name": "アップルパイ",     "price": 228, "category": "デザート",
+     "description": "シナモン香る温かいアップルパイ。",
+     "image": "apple-pie",     "alt": "アップルパイの写真",
+     "vector": [7,0,3,0,5,5,0,6,0,0,0,6,0,0,5,8,0,0,5,8]},
+    {"id": "mont-blanc",       "name": "モンブラン",       "price": 298, "category": "デザート",
+     "description": "濃厚な栗クリームとほっくり食感のモンブラン。",
+     "image": "mont-blanc",    "alt": "モンブランの写真",
+     "vector": [7,0,0,0,8,0,6,4,0,0,6,0,7,0,6,0,0,0,8,9]},
+    {"id": "pancake",          "name": "パンケーキ",       "price": 198, "category": "パン",
+     "description": "ふわふわのパンケーキ。",
+     "image": "pancake",       "alt": "パンケーキの写真",
+     "vector": [8,0,0,0,2,0,7,0,0,0,0,7,6,5,0,5,0,0,4,6]},
+    {"id": "donut",            "name": "ドーナツ",         "price": 148, "category": "スナック",
+     "description": "もちもちのドーナツ。",
+     "image": "donut",         "alt": "ドーナツの写真",
+     "vector": [8,0,0,0,5,0,5,2,0,2,0,0,3,5,3,3,0,0,4,7]},
+    {"id": "brownie",          "name": "ブラウニー",       "price": 178, "category": "デザート",
+     "description": "濃厚なチョコとナッツが絡み合うブラウニー。",
+     "image": "brownie",       "alt": "ブラウニーの写真",
+     "vector": [7,4,0,0,8,0,0,0,0,9,6,0,3,0,7,0,0,0,8,9]},
+    {"id": "macaron",          "name": "マカロン",         "price": 178, "category": "デザート",
+     "description": "カラフルでかわいいマカロン。",
+     "image": "macaron",       "alt": "マカロンの写真",
+     "vector": [8,0,0,0,2,6,5,0,0,0,0,0,6,6,0,0,4,5,3,9]},
+    {"id": "choux-cream",      "name": "シュークリーム",   "price": 138, "category": "デザート",
+     "description": "サクサク生地にたっぷりカスタード。",
+     "image": "choux-cream",   "alt": "シュークリームの写真",
+     "vector": [7,0,0,0,3,0,8,0,0,0,0,0,8,6,0,0,4,0,3,8]},
+    {"id": "vanilla-ice",      "name": "バニラアイス",     "price": 148, "category": "アイス",
+     "description": "なめらかなバニラアイス。冷たくて爽やか。",
+     "image": "vanilla-ice",   "alt": "バニラアイスの写真",
+     "vector": [6,0,0,5,0,0,8,0,0,0,0,0,8,7,0,0,9,5,2,7]},
+    {"id": "choco-ice",        "name": "チョコアイス",     "price": 148, "category": "アイス",
+     "description": "濃いチョコレートのアイス。",
+     "image": "choco-ice",     "alt": "チョコアイスの写真",
+     "vector": [7,2,0,2,5,0,5,0,0,9,0,0,6,5,0,0,9,0,7,8]},
+    {"id": "strawberry-short", "name": "いちごショート",   "price": 298, "category": "デザート",
+     "description": "ふわふわスポンジと生クリーム、甘酸っぱいいちご。",
+     "image": "strawberry-short", "alt": "いちごショートケーキの写真",
+     "vector": [7,0,4,3,0,7,6,0,0,0,0,0,6,5,0,0,4,6,2,9]},
+    {"id": "fruit-tart",       "name": "フルーツタルト",   "price": 348, "category": "デザート",
+     "description": "季節のフルーツが盛りだくさん。",
+     "image": "fruit-tart",    "alt": "フルーツタルトの写真",
+     "vector": [5,0,5,6,0,9,0,0,0,0,0,0,3,6,0,0,5,9,0,9]},
+]
+
+# ── AWS設定 ──────────────────────────────────────
+dynamodb         = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
+TABLE_INVENTORY  = os.environ.get("TABLE_INVENTORY",  "Inventory")
+TABLE_PRODUCTS   = os.environ.get("TABLE_PRODUCTS",   "Products")
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "anthropic.claude-3-haiku-20240307-v1:0")
+
+
+# ── ユーティリティ関数 ────────────────────────────
+
+def dot_product(vec_a, vec_b):
+    """内積スコア計算"""
+    return sum(a * b for a, b in zip(vec_a, vec_b))
+
+def build_user_vector(selected_tags):
+    """気分タグ → ユーザーベクトル生成"""
+    vec = [0] * len(TAGS)
+    for tag in selected_tags:
+        if tag in TAG_INDEX:
+            vec[TAG_INDEX[tag]] += 5
+    return vec
+
+def update_user_vector(user_vector, product_vector):
+    """選択商品のベクトルをユーザーベクトルに加算"""
+    return [u + p for u, p in zip(user_vector, product_vector)]
+
+def get_in_stock_products(store_id=1):
+    """DynamoDBから在庫あり商品を取得。失敗時はローカルデータにフォールバック"""
+    try:
+        inv_table    = dynamodb.Table(TABLE_INVENTORY)
+        resp         = inv_table.query(KeyConditionExpression=Key("store_id").eq(store_id))
+        in_stock_ids = {item["product_id"] for item in resp["Items"] if int(item.get("stock", 0)) > 0}
+        prod_table   = dynamodb.Table(TABLE_PRODUCTS)
+        products     = []
+        for pid in in_stock_ids:
+            r = prod_table.get_item(Key={"product_id": pid})
+            if "Item" in r:
+                item = r["Item"]
+                item["vector"] = list(item.get("vector", []))
+                products.append(item)
+        return products if products else PRODUCTS
+    except Exception as e:
+        logger.error(f"Error accessing DynamoDB: {str(e)}", exc_info=True)
+        return PRODUCTS
+
+def recommend(user_vector, products, exclude_ids=None, n=CANDIDATES_PER_CYCLE, temperature=2.0, mh_steps=100):
+    """MH法で上位n商品を返す"""
+    exclude_ids = exclude_ids or []
+    candidates  = [p for p in products if p["id"] not in exclude_ids]
+    if not candidates:
+        return []
+
+    def get_score(p):
+        return dot_product(user_vector, p["vector"])
+
+    current = random.choice(candidates)
+    samples = []
+    for _ in range(mh_steps):
+        proposal         = random.choice(candidates)
+        p_c              = math.exp(get_score(current)  / temperature)
+        p_p              = math.exp(get_score(proposal) / temperature)
+        if random.random() < min(1, p_p / p_c):
+            current = proposal
+        samples.append(current)
+
+    unique, seen = [], set()
+    for s in reversed(samples):
+        if s["id"] not in seen:
+            unique.append(s)
+            seen.add(s["id"])
+        if len(unique) == n:
+            break
+    for p in candidates:
+        if len(unique) == n:
+            break
+        if p["id"] not in seen:
+            unique.append(p)
+            seen.add(p["id"])
+
+    random.shuffle(unique)
+    return unique
+
+def product_to_json(product):
+    """商品データをAPIレスポンス用に整形"""
+    return {
+        "id":          product["id"],
+        "name":        product["name"],
+        "price":       product["price"],
+        "description": product["description"],
+        "image":       product["image"],
+        "alt":         product["alt"],
+    }
+
+def generate_ai_comment(user_vector, chosen_product):
+    """Bedrockでレコメンド理由を1文生成"""
+    tag_scores = [(TAGS[i], user_vector[i]) for i in range(len(TAGS)) if user_vector[i] > 0]
+    tag_scores.sort(key=lambda x: x[1], reverse=True)
+    top_tags = [t for t, _ in tag_scores[:3]] or ["おいしい"]
+    prompt = (
+        f"ユーザーは「{'」、「'.join(top_tags)}」に当てはまる商品を望んでいます。\n"
+        f"おすすめ商品は「{chosen_product['name']}」です（{chosen_product['description']}）。\n"
+        "これを踏まえて、レコメンド理由を一文で考えてください。"
+    )
+    try:
+        bedrock = boto3.client("bedrock-runtime", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
+        body    = json.dumps({"anthropic_version": "bedrock-2023-05-31", "max_tokens": 200,
+                              "messages": [{"role": "user", "content": prompt}]})
+        resp    = bedrock.invoke_model(modelId=BEDROCK_MODEL_ID, body=body)
+        return json.loads(resp["body"].read())["content"][0]["text"].strip()
+    except Exception as e:
+        logger.error(f"Bedrock invoke_model failed: {type(e).__name__}: {e}", exc_info=True)
+        return f"「{', '.join(top_tags)}」な気分にぴったりの一品です！"
+
+
+# ── APIルート ─────────────────────────────────────
+
+@app.route("/api/mood", methods=["POST"])
+def mood():
+    """
+    フロント→バック: { mood_tags: ["甘い", "チョコ"], store_id: 1 }
+    バック→フロント: { user_vector, cycle, max_cycles, candidates, no_match_option }
+    """
+    body        = request.get_json(silent=True) or {}
+    mood_tags   = body.get("mood_tags", [])
+    store_id    = body.get("store_id", 1)
+    user_vector = build_user_vector(mood_tags)
+    products    = get_in_stock_products(store_id)
+    candidates  = recommend(user_vector, products)
+    return jsonify({
+        "user_vector":     user_vector,
+        "cycle":           1,
+        "max_cycles":      MAX_CYCLES,
+        "candidates":      [product_to_json(p) for p in candidates],
+        "no_match_option": True,
+    })
+
+
+@app.route("/api/select", methods=["POST"])
+def select():
+    """
+    フロント→バック:
+      { user_vector, cycle, selected_product, selected_ids, store_id,
+        action: "interested" | "decide",  # ← 気になる or それにする
+        no_match: bool }
+
+    ■ action="interested"（気になる）→ 次の候補を返す（通常サイクル継続）
+    ■ action="decide"（それにする）  → その商品でfinalレスポンスを即返す
+
+    バック→フロント（interested）:
+      { user_vector, cycle, max_cycles, candidates, no_match_option, is_final }
+    バック→フロント（decide）:
+      { recommendation, ai_comment }
+    """
+    body             = request.get_json(silent=True) or {}
+    user_vector      = body.get("user_vector", [0] * len(TAGS))
+    cycle            = body.get("cycle", 1)
+    selected_product = body.get("selected_product")
+    selected_ids     = body.get("selected_ids", [])
+    no_match         = body.get("no_match", False)
+    store_id         = body.get("store_id", 1)
+    action           = body.get("action", "interested")  # ← 新規追加
+    products         = get_in_stock_products(store_id)
+
+    # 選択商品でベクトル更新（no_matchでなければ）
+    if not no_match and selected_product:
+        matched = next((p for p in products if p["id"] == selected_product["id"]), None)
+        if matched:
+            user_vector = update_user_vector(user_vector, matched["vector"])
+        selected_ids = selected_ids + [selected_product["id"]]
+
+    # ── それにする分岐 ──────────────────────────
+    if action == "decide" and selected_product:
+        ai_comment = generate_ai_comment(user_vector, selected_product)
+        return jsonify({
+            "recommendation": selected_product,
+            "ai_comment":     ai_comment,
+        })
+
+    # ── 気になる（通常サイクル継続）──────────────
+    next_cycle = cycle + 1
+    is_final   = next_cycle >= MAX_CYCLES
+    candidates = recommend(user_vector, products, exclude_ids=selected_ids)
+    return jsonify({
+        "user_vector":     user_vector,
+        "cycle":           next_cycle,
+        "max_cycles":      MAX_CYCLES,
+        "candidates":      [product_to_json(p) for p in candidates],
+        "no_match_option": not is_final,
+        "is_final":        is_final,
+    })
+
+
+@app.route("/api/final", methods=["POST"])
+def final():
+    """
+    フロント→バック: { user_vector, selected_product, store_id }
+    バック→フロント: { recommendation, ai_comment }
+    """
+    body             = request.get_json(silent=True) or {}
+    user_vector      = body.get("user_vector", [0] * len(TAGS))
+    selected_product = body.get("selected_product")
+    store_id         = body.get("store_id", 1)
+    if not selected_product:
+        products         = get_in_stock_products(store_id)
+        top              = recommend(user_vector, products, n=1)
+        selected_product = product_to_json(top[0]) if top else {}
+    ai_comment = generate_ai_comment(user_vector, selected_product)
+    return jsonify({
+        "recommendation": selected_product,
+        "ai_comment":     ai_comment,
+    })
+
+@app.route("/api/admin/inventory", methods=["PATCH"])
+def admin_inventory():
+    body     = request.get_json(silent=True) or {}
+    store_id = body.get("store_id", 1)
+    items    = body.get("items", [])
+
+    if not items:
+        return jsonify({"error": "items is required"}), 400
+
+    def calc_stock_status(stock):
+        if stock == 0:  return "out_of_stock"
+        if stock <= 5:  return "low"
+        return "in_stock"
+
+    import datetime  
+
+
+    updated = []
+    try:
+        inv_table = dynamodb.Table(TABLE_INVENTORY)
+        for item in items:
+            product_id   = item.get("product_id")
+            stock        = int(item.get("stock", 0))
+            stock_status = calc_stock_status(stock)
+            updated_at   = datetime.datetime.utcnow().isoformat()
+
+            inv_table.put_item(Item={
+                "store_id":     store_id,
+                "product_id":   product_id,
+                "stock":        stock,
+                "stock_status": stock_status,
+                "updated_at":   updated_at,
+            })
+            updated.append({
+                "product_id":   product_id,
+                "stock":        stock,
+                "stock_status": stock_status,
+            })
+        return jsonify({"updated": updated})
+
+    except Exception as e:
+        for item in items:
+            stock = int(item.get("stock", 0))
+            updated.append({
+                "product_id":   item.get("product_id"),
+                "stock":        stock,
+                "stock_status": calc_stock_status(stock),
+            })
+        return jsonify({"updated": updated, "warning": "DynamoDB未接続のためローカルのみ更新"})
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
+
+'''
+
+import json
+import random
+import math
+import os
+import boto3
+import datetime
+from flask import Flask, request, jsonify
+from flask_cors import CORS 
+from boto3.dynamodb.conditions import Key
 
 app = Flask(__name__)
 CORS(app)   
@@ -90,7 +445,7 @@ PRODUCTS = [
      "vector": [5,0,5,6,0,9,0,0,0,0,0,0,3,6,0,0,5,9,0,9]},
 ]
 
-#MOCK_INVENTORY = { p["id"]: 2 for p in PRODUCTS }
+MOCK_INVENTORY = { p["id"]: 2 for p in PRODUCTS }
 
 # ── AWS設定 ──────────────────────────────────────
 dynamodb         = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
@@ -117,22 +472,36 @@ def update_user_vector(user_vector, product_vector):
     """選択商品のベクトルをユーザーベクトルに加算"""
     return [u + p for u, p in zip(user_vector, product_vector)]
 
+'''
+def get_in_stock_products(store_id=1):
+    """DynamoDBから在庫あり商品を取得。失敗時はローカルデータにフォールバック"""
+    try:
+        inv_table    = dynamodb.Table(TABLE_INVENTORY)
+        resp         = inv_table.query(KeyConditionExpression=Key("store_id").eq(store_id))
+        in_stock_ids = {item["product_id"] for item in resp["Items"] if int(item.get("stock", 0)) > 0}
+        prod_table   = dynamodb.Table(TABLE_PRODUCTS)
+        products     = []
+        for pid in in_stock_ids:
+            r = prod_table.get_item(Key={"product_id": pid})
+            if "Item" in r:
+                item = r["Item"]
+                item["vector"] = list(item.get("vector", []))
+                products.append(item)
+        return products if products else PRODUCTS
+    except Exception:
+        return PRODUCTS
+'''
 
 def get_in_stock_products(store_id=1):
-    """DynamoDBから在庫あり商品を取得"""
-    inv_dict = get_inventory_from_db(store_id)
-    
-    # データベース未設定時などのフェイルセーフ
-    if inv_dict is None:
-        print("警告: DynamoDBから在庫を取得できなかったため、全商品を返します。")
-        return PRODUCTS
-
+    """仮のデータベースから在庫あり商品を取得"""
     in_stock_products = []
+    
     for p in PRODUCTS:
-        # DB上の在庫が0より大きいものだけリストに追加（DBにデータが無い商品は0扱い）
-        if inv_dict.get(p["id"], 0) > 0:
+        # モックの在庫が0より大きいものだけをリストに追加
+        if MOCK_INVENTORY.get(p["id"], 0) > 0:
             in_stock_products.append(p)
             
+    # もし在庫あり商品がゼロの場合は、テストが止まらないように全商品を返す（フェイルセーフ）
     return in_stock_products if in_stock_products else PRODUCTS
 
 def recommend(user_vector, products, exclude_ids=None, n=CANDIDATES_PER_CYCLE, temperature=2.0, mh_steps=100):
@@ -211,21 +580,16 @@ def generate_ai_comment(user_vector, chosen_product):
 @app.route("/api/users", methods=["GET"])
 def get_users():
     """
-    バック→フロント: [{ "id": 1, "name": "ユーザーA" }, ...]
+    バック→フロント: [{ "id": 1, "name": "ユーザーA" }, { "id": 2, "name": "ユーザーB" }]
     """
-    # DynamoDBからユーザー一覧を取得
-    users = get_all_users()
-
-    # DynamoDBにデータがない、または接続エラー時のフェイルセーフ（テスト用）
-    if not users:
-        print("警告: DynamoDBからユーザーが取得できなかったため、モックデータを返します。")
-        users = [
-            {"id": "user1", "name": "ユーザーA"},
-            {"id": "user2", "name": "ユーザーB"},
-            {"id": "user3", "name": "ユーザーC"}
-        ]
-
+    # ゆくゆくはDynamoDB等からユーザー情報を取得する処理に変更します
+    users = [
+        {"id": 1, "name": "ユーザーA"},
+        {"id": 2, "name": "ユーザーB"},
+        {"id": 3, "name": "ユーザーC"}
+    ]
     return jsonify(users)
+
 '''
 @app.route("/api/login", methods=["POST"])
 def login():
@@ -366,13 +730,64 @@ def final():
         "ai_comment":     ai_comment,
     })
 
+'''
+@app.route("/api/admin/inventory", methods=["PATCH"])
+def admin_inventory():
+    body     = request.get_json(silent=True) or {}
+    store_id = body.get("store_id", 1)
+    items    = body.get("items", [])
+
+    if not items:
+        return jsonify({"error": "items is required"}), 400
+
+    def calc_stock_status(stock):
+        if stock == 0:  return "out_of_stock"
+        if stock <= 5:  return "low"
+        return "in_stock"
+
+    import datetime  
+
+
+    updated = []
+    try:
+        inv_table = dynamodb.Table(TABLE_INVENTORY)
+        for item in items:
+            product_id   = item.get("product_id")
+            stock        = int(item.get("stock", 0))
+            stock_status = calc_stock_status(stock)
+            updated_at   = datetime.datetime.utcnow().isoformat()
+
+            inv_table.put_item(Item={
+                "store_id":     store_id,
+                "product_id":   product_id,
+                "stock":        stock,
+                "stock_status": stock_status,
+                "updated_at":   updated_at,
+            })
+            updated.append({
+                "product_id":   product_id,
+                "stock":        stock,
+                "stock_status": stock_status,
+            })
+        return jsonify({"updated": updated})
+
+    except Exception as e:
+        for item in items:
+            stock = int(item.get("stock", 0))
+            updated.append({
+                "product_id":   item.get("product_id"),
+                "stock":        stock,
+                "stock_status": calc_stock_status(stock),
+            })
+        return jsonify({"updated": updated, "warning": "DynamoDB未接続のためローカルのみ更新"})
+'''
+
 @app.route("/api/admin/inventory", methods=["GET", "PATCH"])
 def admin_inventory():
-    # ── GET: 在庫一覧の取得 ──
-    if request.method == "GET":
-        store_id = int(request.args.get("store_id", 1))
-        inv_dict = get_inventory_from_db(store_id) or {}
+    global MOCK_INVENTORY # 仮のデータベースを参照・更新するために必要
 
+    # ── GET: 在庫一覧の取得（仮のデータベースから） ──
+    if request.method == "GET":
         inventory_list = []
         for p in PRODUCTS:
             inventory_list.append({
@@ -380,71 +795,74 @@ def admin_inventory():
                 "name":       p["name"],
                 "price":      p["price"],
                 "image":      p["image"],
-                "stock":      inv_dict.get(p["id"], 0) # DBに無ければ0を表示
+                "stock":      MOCK_INVENTORY.get(p["id"], 0) # 現在の在庫数を取得
             })
         return jsonify({"inventory": inventory_list})
 
-    # ── PATCH: 在庫の更新 ──
+    # ── PATCH: 在庫の更新（仮のデータベースへ保存） ──
     if request.method == "PATCH":
         body  = request.get_json(silent=True) or {}
         items = body.get("items", [])
-        store_id = int(body.get("store_id", 1))
 
         if not items:
             return jsonify({"error": "items is required"}), 400
 
-        try:
-            # DynamoDBに保存
-            updated = update_inventory_to_db(store_id, items)
-            print("=== DynamoDBの在庫データを更新しました ===")
-            return jsonify({"updated": updated, "message": "DynamoDBを更新しました"})
-        except Exception as e:
-            return jsonify({"error": f"在庫の更新に失敗しました: {e}"}), 500
+        updated = []
+        for item in items:
+            product_id = item.get("product_id")
+            stock      = int(item.get("stock", 0))
+            
+            # 仮のデータベースの値を書き換え
+            if product_id in MOCK_INVENTORY:
+                MOCK_INVENTORY[product_id] = stock
+            
+            updated.append({
+                "product_id": product_id,
+                "stock":      stock
+            })
 
+        print("=== 在庫データを更新しました ===")
+        print(MOCK_INVENTORY) # ターミナルで変更が確認できるように出力
+
+        return jsonify({"updated": updated, "message": "仮のデータベースを更新しました"})
 
 @app.route("/api/history", methods=["GET"])
 def get_history():
+    """
+    フロント→バック: GET /api/history?user_id=1
+    バック→フロント: { history: [ { 商品データ1 }, { 商品データ2 } ] }
+    """
     user_id = request.args.get("user_id")
     
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
         
-    # DynamoDBから履歴を取得
-    db_history = get_order_history_by_user_id(user_id)
-    
-    # DBから取得できなかった場合（認証エラーなど）のフェイルセーフ（テスト用）
-    if db_history is None:
-        print("警告: DynamoDBから履歴が取得できなかったため、モックデータを返します。")
-        mock_history = []
-        if "1" in str(user_id):
-            mock_history = [{"product_id": PRODUCTS[1]["id"], "purchased_at": "2026-03-20 14:30"}, 
-                            {"product_id": PRODUCTS[11]["id"], "purchased_at": "2026-03-19 10:00"}]
-        elif "2" in str(user_id):
-            mock_history = [{"product_id": PRODUCTS[0]["id"], "purchased_at": "2026-03-21 09:15"}]
-        else:
-            mock_history = [{"product_id": PRODUCTS[3]["id"], "purchased_at": "2026-03-18 18:45"}, 
-                            {"product_id": PRODUCTS[4]["id"], "purchased_at": "2026-03-17 12:30"}]
-        db_history = mock_history
-
-    # 現在の在庫数をDynamoDBから取得 (store_id=1を想定)
-    inv_dict = get_inventory_from_db(1) or {}
+    # ゆくゆくはDynamoDBの履歴テーブルから取得しますが、今回はモックデータを返します
+    mock_history = []
+    if str(user_id) == "1":
+        # ユーザーAの履歴（ティラミス、バニラアイス）
+        mock_history = [PRODUCTS[1], PRODUCTS[11]]
+    elif str(user_id) == "2":
+        # ユーザーBの履歴（チョココロネ）
+        mock_history = [PRODUCTS[0]]
+    else:
+        # その他のユーザー（濃厚チーズケーキ、アップルパイ）
+        mock_history = [PRODUCTS[3], PRODUCTS[4]]
         
+    # API用にデータを整形して返す
     formatted_history = []
-    # DynamoDBの履歴データ（またはモック）をループ処理
-    for item in db_history:
-        product_id = item.get("product_id")
-        purchased_at = item.get("purchased_at", "日時不明")
+    for p in mock_history:
+        item = product_to_json(p)
+        # 履歴っぽく見せるため、仮の購入日時を追加
+        item["purchased_at"] = "2026-03-20 14:30" 
+
+        # 【追加】現在の在庫数を履歴データに含める
+        item["stock"] = MOCK_INVENTORY.get(p["id"], 0) 
         
-        # PRODUCTSリストから該当商品の詳細情報（名前や値段など）を探す
-        product = next((p for p in PRODUCTS if p["id"] == product_id), None)
-        
-        if product:
-            formatted_item = product_to_json(product)
-            formatted_item["purchased_at"] = purchased_at
-            formatted_item["stock"] = inv_dict.get(product_id, 0) # 最新の在庫を反映
-            formatted_history.append(formatted_item)
+        formatted_history.append(item)
         
     return jsonify({"history": formatted_history})
+
 
 
 if __name__ == "__main__":
