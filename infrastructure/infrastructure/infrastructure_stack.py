@@ -22,18 +22,33 @@ class InfrastructureStack(Stack):
 
         # ── DynamoDB ──────────────────────────────────────────
         inventory_table = dynamodb.Table(
-            self, "InventoryTable",
-            table_name="Inventory",
-            partition_key=dynamodb.Attribute(name="store_id", type=dynamodb.AttributeType.NUMBER),
-            sort_key=dynamodb.Attribute(name="product_id", type=dynamodb.AttributeType.STRING),
+            self, "InventoryProdTable",
+            table_name="inventory_prod",
+            partition_key=dynamodb.Attribute(name="id", type=dynamodb.AttributeType.STRING),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
         products_table = dynamodb.Table(
-            self, "ProductsTable",
-            table_name="Products",
-            partition_key=dynamodb.Attribute(name="product_id", type=dynamodb.AttributeType.STRING),
+            self, "ProductsProdTable",
+            table_name="prodocts_prod",
+            partition_key=dynamodb.Attribute(name="id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        user_table = dynamodb.Table(
+            self, "UserProdTable",
+            table_name="user_prod",
+            partition_key=dynamodb.Attribute(name="id", type=dynamodb.AttributeType.STRING),
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
+            removal_policy=RemovalPolicy.DESTROY,
+        )
+
+        order_history_table = dynamodb.Table(
+            self, "OrderHistoryTable",
+            table_name="orderd_history",
+            partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.NUMBER),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
@@ -43,12 +58,23 @@ class InfrastructureStack(Stack):
             self, "BackendFunction",
             runtime=lambda_.Runtime.PYTHON_3_12,
             handler="lambda_handler.handler",
-            code=lambda_.Code.from_asset("../application/backend"),
+            code=lambda_.Code.from_asset(
+                "../application/backend",
+                bundling={
+                    "image": lambda_.Runtime.PYTHON_3_12.bundling_image,
+                    "command": [
+                        "bash", "-c",
+                        "pip install -r requirements.txt -t /asset-output && cp -r . /asset-output",
+                    ],
+                },
+            ),
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "TABLE_INVENTORY": inventory_table.table_name,
-                "TABLE_PRODUCTS": products_table.table_name,
+                "TABLE_INVENTORY_PROD": inventory_table.table_name,
+                "TABLE_PRODUCTS_PROD": products_table.table_name,
+                "TABLE_USERS": user_table.table_name,
+                "TABLE_ORDER_HISTORY": order_history_table.table_name,
                 "BEDROCK_MODEL_ID": "anthropic.claude-3-haiku-20240307-v1:0",
                 "AWS_REGION_NAME": self.region,
             },
@@ -56,6 +82,8 @@ class InfrastructureStack(Stack):
 
         inventory_table.grant_read_write_data(fn)
         products_table.grant_read_data(fn)
+        user_table.grant_read_data(fn)
+        order_history_table.grant_read_write_data(fn)
 
         fn.add_to_role_policy(iam.PolicyStatement(
             actions=["bedrock:InvokeModel"],
