@@ -72,11 +72,18 @@ function HistoryPage({ user, onChoose }) {
               
               // 履歴画面用のボタンアクション（空の関数にするか、再購入用のアラートを入れる）
               onConsider={() => alert('履歴からは「気になる」に追加できません')}
-              onChoose={() => onChoose({
-                ...item,
-                // 履歴から選んだ時専用のAIコメント（仮）をセットします
-                reason: '以前も選んだお気に入りの商品ですね！今日の気分にもぴったりです。'
-              })}            />
+              onChoose={() => {
+                if (item.stock <= 0) {
+                  alert('申し訳ありません。この商品は現在在庫切れです。');
+                  return; // returnすることで、親のonChooseが呼ばれず画面遷移を防ぎます
+                }
+                
+                onChoose({
+                  ...item,
+                  reason: '以前も選んだお気に入りの商品ですね！今日の気分にもぴったりです。'
+                });
+              }}
+            />
           ))}
         </section>
       )}

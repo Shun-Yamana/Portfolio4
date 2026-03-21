@@ -854,6 +854,10 @@ def get_history():
         item = product_to_json(p)
         # 履歴っぽく見せるため、仮の購入日時を追加
         item["purchased_at"] = "2026-03-20 14:30" 
+
+        # 【追加】現在の在庫数を履歴データに含める
+        item["stock"] = MOCK_INVENTORY.get(p["id"], 0) 
+        
         formatted_history.append(item)
         
     return jsonify({"history": formatted_history})
