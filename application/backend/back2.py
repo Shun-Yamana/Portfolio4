@@ -198,7 +198,8 @@ def generate_ai_comment(user_vector, chosen_product):
                               "messages": [{"role": "user", "content": prompt}]})
         resp    = bedrock.invoke_model(modelId=BEDROCK_MODEL_ID, body=body)
         return json.loads(resp["body"].read())["content"][0]["text"].strip()
-    except Exception:
+    except Exception as e:
+        logger.error(f"Bedrock invoke_model failed: {type(e).__name__}: {e}", exc_info=True)
         return f"「{', '.join(top_tags)}」な気分にぴったりの一品です！"
 
 
