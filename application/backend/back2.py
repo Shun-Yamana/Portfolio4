@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS 
 from boto3.dynamodb.conditions import Key
 from user import get_all_users
+from inventory import get_inventory_from_db, update_inventory_to_db # ← これを追加
 
 app = Flask(__name__)
 CORS(app)   
@@ -88,7 +89,7 @@ PRODUCTS = [
      "vector": [5,0,5,6,0,9,0,0,0,0,0,0,3,6,0,0,5,9,0,9]},
 ]
 
-MOCK_INVENTORY = { p["id"]: 2 for p in PRODUCTS }
+#MOCK_INVENTORY = { p["id"]: 2 for p in PRODUCTS }
 
 # ── AWS設定 ──────────────────────────────────────
 dynamodb         = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
@@ -115,36 +116,22 @@ def update_user_vector(user_vector, product_vector):
     """選択商品のベクトルをユーザーベクトルに加算"""
     return [u + p for u, p in zip(user_vector, product_vector)]
 
-'''
-def get_in_stock_products(store_id=1):
-    """DynamoDBから在庫あり商品を取得。失敗時はローカルデータにフォールバック"""
-    try:
-        inv_table    = dynamodb.Table(TABLE_INVENTORY)
-        resp         = inv_table.query(KeyConditionExpression=Key("store_id").eq(store_id))
-        in_stock_ids = {item["product_id"] for item in resp["Items"] if int(item.get("stock", 0)) > 0}
-        prod_table   = dynamodb.Table(TABLE_PRODUCTS)
-        products     = []
-        for pid in in_stock_ids:
-            r = prod_table.get_item(Key={"product_id": pid})
-            if "Item" in r:
-                item = r["Item"]
-                item["vector"] = list(item.get("vector", []))
-                products.append(item)
-        return products if products else PRODUCTS
-    except Exception:
-        return PRODUCTS
-'''
 
 def get_in_stock_products(store_id=1):
-    """仮のデータベースから在庫あり商品を取得"""
-    in_stock_products = []
+    """DynamoDBから在庫あり商品を取得"""
+    inv_dict = get_inventory_from_db(store_id)
     
+    # データベース未設定時などのフェイルセーフ
+    if inv_dict is None:
+        print("警告: DynamoDBから在庫を取得できなかったため、全商品を返します。")
+        return PRODUCTS
+
+    in_stock_products = []
     for p in PRODUCTS:
-        # モックの在庫が0より大きいものだけをリストに追加
-        if MOCK_INVENTORY.get(p["id"], 0) > 0:
+        # DB上の在庫が0より大きいものだけリストに追加（DBにデータが無い商品は0扱い）
+        if inv_dict.get(p["id"], 0) > 0:
             in_stock_products.append(p)
             
-    # もし在庫あり商品がゼロの場合は、テストが止まらないように全商品を返す（フェイルセーフ）
     return in_stock_products if in_stock_products else PRODUCTS
 
 def recommend(user_vector, products, exclude_ids=None, n=CANDIDATES_PER_CYCLE, temperature=2.0, mh_steps=100):
@@ -378,64 +365,13 @@ def final():
         "ai_comment":     ai_comment,
     })
 
-'''
-@app.route("/api/admin/inventory", methods=["PATCH"])
-def admin_inventory():
-    body     = request.get_json(silent=True) or {}
-    store_id = body.get("store_id", 1)
-    items    = body.get("items", [])
-
-    if not items:
-        return jsonify({"error": "items is required"}), 400
-
-    def calc_stock_status(stock):
-        if stock == 0:  return "out_of_stock"
-        if stock <= 5:  return "low"
-        return "in_stock"
-
-    import datetime  
-
-
-    updated = []
-    try:
-        inv_table = dynamodb.Table(TABLE_INVENTORY)
-        for item in items:
-            product_id   = item.get("product_id")
-            stock        = int(item.get("stock", 0))
-            stock_status = calc_stock_status(stock)
-            updated_at   = datetime.datetime.utcnow().isoformat()
-
-            inv_table.put_item(Item={
-                "store_id":     store_id,
-                "product_id":   product_id,
-                "stock":        stock,
-                "stock_status": stock_status,
-                "updated_at":   updated_at,
-            })
-            updated.append({
-                "product_id":   product_id,
-                "stock":        stock,
-                "stock_status": stock_status,
-            })
-        return jsonify({"updated": updated})
-
-    except Exception as e:
-        for item in items:
-            stock = int(item.get("stock", 0))
-            updated.append({
-                "product_id":   item.get("product_id"),
-                "stock":        stock,
-                "stock_status": calc_stock_status(stock),
-            })
-        return jsonify({"updated": updated, "warning": "DynamoDB未接続のためローカルのみ更新"})
-'''
-
 @app.route("/api/admin/inventory", methods=["GET", "PATCH"])
 def admin_inventory():
-    global MOCK_INVENTORY # 仮のデータベースを参照・更新するために必要
-
-    # ── GET: 在庫一覧の取得（仮のデータベースから） ──
+    # ── GET: 在庫一覧の取得 ──
     if request.method == "GET":
+        store_id = int(request.args.get("store_id", 1))
+        inv_dict = get_inventory_from_db(store_id) or {}
+
         inventory_list = []
         for p in PRODUCTS:
             inventory_list.append({
@@ -443,70 +379,52 @@ def admin_inventory():
                 "name":       p["name"],
                 "price":      p["price"],
                 "image":      p["image"],
-                "stock":      MOCK_INVENTORY.get(p["id"], 0) # 現在の在庫数を取得
+                "stock":      inv_dict.get(p["id"], 0) # DBに無ければ0を表示
             })
         return jsonify({"inventory": inventory_list})
 
-    # ── PATCH: 在庫の更新（仮のデータベースへ保存） ──
+    # ── PATCH: 在庫の更新 ──
     if request.method == "PATCH":
         body  = request.get_json(silent=True) or {}
         items = body.get("items", [])
+        store_id = int(body.get("store_id", 1))
 
         if not items:
             return jsonify({"error": "items is required"}), 400
 
-        updated = []
-        for item in items:
-            product_id = item.get("product_id")
-            stock      = int(item.get("stock", 0))
-            
-            # 仮のデータベースの値を書き換え
-            if product_id in MOCK_INVENTORY:
-                MOCK_INVENTORY[product_id] = stock
-            
-            updated.append({
-                "product_id": product_id,
-                "stock":      stock
-            })
+        try:
+            # DynamoDBに保存
+            updated = update_inventory_to_db(store_id, items)
+            print("=== DynamoDBの在庫データを更新しました ===")
+            return jsonify({"updated": updated, "message": "DynamoDBを更新しました"})
+        except Exception as e:
+            return jsonify({"error": f"在庫の更新に失敗しました: {e}"}), 500
 
-        print("=== 在庫データを更新しました ===")
-        print(MOCK_INVENTORY) # ターミナルで変更が確認できるように出力
-
-        return jsonify({"updated": updated, "message": "仮のデータベースを更新しました"})
 
 @app.route("/api/history", methods=["GET"])
 def get_history():
-    """
-    フロント→バック: GET /api/history?user_id=1
-    バック→フロント: { history: [ { 商品データ1 }, { 商品データ2 } ] }
-    """
     user_id = request.args.get("user_id")
     
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
         
-    # ゆくゆくはDynamoDBの履歴テーブルから取得しますが、今回はモックデータを返します
     mock_history = []
-    if str(user_id) == "1":
-        # ユーザーAの履歴（ティラミス、バニラアイス）
+    # ユーザーIDが文字列(user1等)か数値かを考慮してマッチング
+    if "1" in str(user_id):
         mock_history = [PRODUCTS[1], PRODUCTS[11]]
-    elif str(user_id) == "2":
-        # ユーザーBの履歴（チョココロネ）
+    elif "2" in str(user_id):
         mock_history = [PRODUCTS[0]]
     else:
-        # その他のユーザー（濃厚チーズケーキ、アップルパイ）
         mock_history = [PRODUCTS[3], PRODUCTS[4]]
         
-    # API用にデータを整形して返す
+    # 現在の在庫数をDynamoDBから取得 (store_id=1を想定)
+    inv_dict = get_inventory_from_db(1) or {}
+        
     formatted_history = []
     for p in mock_history:
         item = product_to_json(p)
-        # 履歴っぽく見せるため、仮の購入日時を追加
         item["purchased_at"] = "2026-03-20 14:30" 
-
-        # 【追加】現在の在庫数を履歴データに含める
-        item["stock"] = MOCK_INVENTORY.get(p["id"], 0) 
-        
+        item["stock"] = inv_dict.get(p["id"], 0) # 最新の在庫を反映
         formatted_history.append(item)
         
     return jsonify({"history": formatted_history})
