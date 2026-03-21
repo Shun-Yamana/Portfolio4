@@ -9,6 +9,7 @@ from flask_cors import CORS
 from boto3.dynamodb.conditions import Key
 from user import get_all_users
 from inventory import get_inventory_from_db, update_inventory_to_db # ← これを追加
+from userhistory import get_order_history_by_user_id # ← これを追加
 
 app = Flask(__name__)
 CORS(app)   
@@ -408,27 +409,42 @@ def get_history():
     if not user_id:
         return jsonify({"error": "user_id is required"}), 400
         
-    mock_history = []
-    # ユーザーIDが文字列(user1等)か数値かを考慮してマッチング
-    if "1" in str(user_id):
-        mock_history = [PRODUCTS[1], PRODUCTS[11]]
-    elif "2" in str(user_id):
-        mock_history = [PRODUCTS[0]]
-    else:
-        mock_history = [PRODUCTS[3], PRODUCTS[4]]
-        
+    # DynamoDBから履歴を取得
+    db_history = get_order_history_by_user_id(user_id)
+    
+    # DBから取得できなかった場合（認証エラーなど）のフェイルセーフ（テスト用）
+    if db_history is None:
+        print("警告: DynamoDBから履歴が取得できなかったため、モックデータを返します。")
+        mock_history = []
+        if "1" in str(user_id):
+            mock_history = [{"product_id": PRODUCTS[1]["id"], "purchased_at": "2026-03-20 14:30"}, 
+                            {"product_id": PRODUCTS[11]["id"], "purchased_at": "2026-03-19 10:00"}]
+        elif "2" in str(user_id):
+            mock_history = [{"product_id": PRODUCTS[0]["id"], "purchased_at": "2026-03-21 09:15"}]
+        else:
+            mock_history = [{"product_id": PRODUCTS[3]["id"], "purchased_at": "2026-03-18 18:45"}, 
+                            {"product_id": PRODUCTS[4]["id"], "purchased_at": "2026-03-17 12:30"}]
+        db_history = mock_history
+
     # 現在の在庫数をDynamoDBから取得 (store_id=1を想定)
     inv_dict = get_inventory_from_db(1) or {}
         
     formatted_history = []
-    for p in mock_history:
-        item = product_to_json(p)
-        item["purchased_at"] = "2026-03-20 14:30" 
-        item["stock"] = inv_dict.get(p["id"], 0) # 最新の在庫を反映
-        formatted_history.append(item)
+    # DynamoDBの履歴データ（またはモック）をループ処理
+    for item in db_history:
+        product_id = item.get("product_id")
+        purchased_at = item.get("purchased_at", "日時不明")
+        
+        # PRODUCTSリストから該当商品の詳細情報（名前や値段など）を探す
+        product = next((p for p in PRODUCTS if p["id"] == product_id), None)
+        
+        if product:
+            formatted_item = product_to_json(product)
+            formatted_item["purchased_at"] = purchased_at
+            formatted_item["stock"] = inv_dict.get(product_id, 0) # 最新の在庫を反映
+            formatted_history.append(formatted_item)
         
     return jsonify({"history": formatted_history})
-
 
 
 if __name__ == "__main__":
