@@ -705,3 +705,56 @@ def admin_inventory():
 
 if __name__ == "__main__":
     app.run(debug=True, port=5001)
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from boto3.dynamodb.conditions import Key
+import datetime
+import os
+import boto3
+
+app = Flask(__name__)
+CORS(app) # フロントエンドからのアクセスを許可
+
+# ── AWS設定 ──
+dynamodb         = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
+TABLE_INVENTORY  = os.environ.get("TABLE_INVENTORY",  "Inventory")
+TABLE_PRODUCTS   = os.environ.get("TABLE_PRODUCTS",   "Products")
+
+@app.route("/api/admin/inventory", methods=["GET", "PATCH"])
+def admin_inventory():
+    inv_table = dynamodb.Table(TABLE_INVENTORY)
+    store_id  = 1
+
+    # 【GET】現在の在庫を読み取る
+    if request.method == "GET":
+        try:
+            resp = inv_table.query(KeyConditionExpression=Key("store_id").eq(store_id))
+            inventory_list = [{"product_id": item["product_id"], "stock": int(item.get("stock", 0))} for item in resp.get("Items", [])]
+            return jsonify({"status": "success", "inventory": inventory_list})
+        except Exception as e:
+            return jsonify({"status": "error", "message": str(e)}), 500
+
+    # 【PATCH】在庫を一括で書き換える
+    elif request.method == "PATCH":
+        body  = request.get_json(silent=True) or {}
+        items = body.get("items", [])
+        
+        def calc_status(s): return "out_of_stock" if s == 0 else ("low" if s <= 5 else "in_stock")
+
+        try:
+            for item in items:
+                pid, stock = item.get("product_id"), int(item.get("stock", 0))
+                inv_table.put_item(Item={
+                    "store_id":     store_id,
+                    "product_id":   pid,
+                    "stock":        stock,
+                    "stock_status": calc_status(stock),
+                    "updated_at":   datetime.datetime.utcnow().isoformat()
+                })
+            return jsonify({"status": "success", "updated_count": len(items)})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5001)
