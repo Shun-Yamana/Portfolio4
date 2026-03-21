@@ -444,6 +444,8 @@ PRODUCTS = [
      "vector": [5,0,5,6,0,9,0,0,0,0,0,0,3,6,0,0,5,9,0,9]},
 ]
 
+MOCK_INVENTORY = { p["id"]: 2 for p in PRODUCTS }
+
 # ── AWS設定 ──────────────────────────────────────
 dynamodb         = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
 TABLE_INVENTORY  = os.environ.get("TABLE_INVENTORY",  "Inventory")
@@ -469,6 +471,7 @@ def update_user_vector(user_vector, product_vector):
     """選択商品のベクトルをユーザーベクトルに加算"""
     return [u + p for u, p in zip(user_vector, product_vector)]
 
+'''
 def get_in_stock_products(store_id=1):
     """DynamoDBから在庫あり商品を取得。失敗時はローカルデータにフォールバック"""
     try:
@@ -486,11 +489,28 @@ def get_in_stock_products(store_id=1):
         return products if products else PRODUCTS
     except Exception:
         return PRODUCTS
+'''
+
+def get_in_stock_products(store_id=1):
+    """仮のデータベースから在庫あり商品を取得"""
+    in_stock_products = []
+    
+    for p in PRODUCTS:
+        # モックの在庫が0より大きいものだけをリストに追加
+        if MOCK_INVENTORY.get(p["id"], 0) > 0:
+            in_stock_products.append(p)
+            
+    # もし在庫あり商品がゼロの場合は、テストが止まらないように全商品を返す（フェイルセーフ）
+    return in_stock_products if in_stock_products else PRODUCTS
 
 def recommend(user_vector, products, exclude_ids=None, n=CANDIDATES_PER_CYCLE, temperature=2.0, mh_steps=100):
     """MH法で上位n商品を返す"""
     exclude_ids = exclude_ids or []
     candidates  = [p for p in products if p["id"] not in exclude_ids]
+    
+    if len(candidates) < n:
+        candidates = products.copy()
+    
     if not candidates:
         return []
 
@@ -709,6 +729,7 @@ def final():
         "ai_comment":     ai_comment,
     })
 
+'''
 @app.route("/api/admin/inventory", methods=["PATCH"])
 def admin_inventory():
     body     = request.get_json(silent=True) or {}
@@ -758,6 +779,51 @@ def admin_inventory():
                 "stock_status": calc_stock_status(stock),
             })
         return jsonify({"updated": updated, "warning": "DynamoDB未接続のためローカルのみ更新"})
+'''
+
+@app.route("/api/admin/inventory", methods=["GET", "PATCH"])
+def admin_inventory():
+    global MOCK_INVENTORY # 仮のデータベースを参照・更新するために必要
+
+    # ── GET: 在庫一覧の取得（仮のデータベースから） ──
+    if request.method == "GET":
+        inventory_list = []
+        for p in PRODUCTS:
+            inventory_list.append({
+                "product_id": p["id"],
+                "name":       p["name"],
+                "price":      p["price"],
+                "image":      p["image"],
+                "stock":      MOCK_INVENTORY.get(p["id"], 0) # 現在の在庫数を取得
+            })
+        return jsonify({"inventory": inventory_list})
+
+    # ── PATCH: 在庫の更新（仮のデータベースへ保存） ──
+    if request.method == "PATCH":
+        body  = request.get_json(silent=True) or {}
+        items = body.get("items", [])
+
+        if not items:
+            return jsonify({"error": "items is required"}), 400
+
+        updated = []
+        for item in items:
+            product_id = item.get("product_id")
+            stock      = int(item.get("stock", 0))
+            
+            # 仮のデータベースの値を書き換え
+            if product_id in MOCK_INVENTORY:
+                MOCK_INVENTORY[product_id] = stock
+            
+            updated.append({
+                "product_id": product_id,
+                "stock":      stock
+            })
+
+        print("=== 在庫データを更新しました ===")
+        print(MOCK_INVENTORY) # ターミナルで変更が確認できるように出力
+
+        return jsonify({"updated": updated, "message": "仮のデータベースを更新しました"})
 
 @app.route("/api/history", methods=["GET"])
 def get_history():

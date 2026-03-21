@@ -8,6 +8,7 @@ import MoodsPage from './moods_page'
 import './moods.css'
 import RoleSelectionPage from './roleSelection_page' // 【追加】インポート
 import HistoryPage from './History_page' // 【追加】履歴ページをインポート
+import AdminPage from './admin_page' // 【追加】管理者ページをインポート
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
@@ -79,12 +80,7 @@ function AppRoot() {
 
   // 管理者が選ばれた場合の仮画面
   if (role === 'admin') {
-    return (
-      <div className="moods-page">
-        <h1 className="moods-page__title">管理者ページ（準備中）</h1>
-        <button className="moods-page__next-btn" onClick={() => setRole(null)}>戻る</button>
-      </div>
-    )
+    return <AdminPage onBack={() => setRole(null)} /> // 【書き換え】仮画面から本物のAdminPageに
   }
 
   // ===== ユーザー向けのコンテンツ部分（タブによって切り替え） =====
