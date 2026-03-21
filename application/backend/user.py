@@ -2,7 +2,7 @@ import os
 import logging
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -28,6 +28,9 @@ def get_all_users():
                 "name": item.get("name")
             })
         return users
-    except ClientError as e:
-        logger.error(f"DynamoDB scan error: {e}")
+    except (ClientError, NoCredentialsError) as e:
+        logger.error(f"DynamoDB access error: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
         return []
