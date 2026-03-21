@@ -9,42 +9,21 @@ import './moods.css'
 import RoleSelectionPage from './roleSelection_page' // 【追加】インポート
 import HistoryPage from './History_page' // 【追加】履歴ページをインポート
 import AdminPage from './admin_page' // 【追加】管理者ページをインポート
+import AdminLoginPage from './AdminLoginPage' // 【追加】ログインページをインポート
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AppRoot />
   </React.StrictMode>
 )
-/*
-function AppRoot() {
-  // 【修正】気分データ（複数の情報を含む）を保存するように変更
-  const [moodData, setMoodData] = useState(null)
-  const [selectedProduct, setSelectedProduct] = useState(null)
-
-  if (selectedProduct) {
-    return <RecomendPage product={selectedProduct} moodTags={moodData?.moodTags || []} />
-  }
-
-  // 気分データが存在すれば ProductsPage を表示
-  if (moodData) {
-    return (
-      <ProductsPage 
-        initialData={moodData}
-        onChoose={setSelectedProduct} 
-      />
-    )
-  }
-
-  return <MoodsPage onChoose={setMoodData} />
-}
-*/
 
 
 function AppRoot() {
   const [role, setRole] = useState(null) // 'user' | 'admin' | null
-  const [currentUser, setCurrentUser] = useState(null) // 【追加】現在ログインしているユーザー情報
+  const [currentUser, setCurrentUser] = useState(null) 
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false) // 【追加】管理者のログイン状態
 
-  const [activeTab, setActiveTab] = useState('mood') // 【追加】'mood' | 'history'
+  const [activeTab, setActiveTab] = useState('mood') // 'mood' | 'history'
 
   const [moodData, setMoodData] = useState(null)
   const [selectedProduct, setSelectedProduct] = useState(null)
@@ -60,37 +39,51 @@ function AppRoot() {
   const handleTabChange = (tab) => {
     setActiveTab(tab)
     if (tab === 'mood') {
-      // 気分タブを押し直したら、最初からやり直せるようにリセット
       setSelectedProduct(null)
       setMoodData(null)
     } else if (tab === 'history') {
-      // 履歴を見る時は、選択中の商品をクリア
       setSelectedProduct(null)
     }
   }
 
   const handleChooseProduct = (product) => {
     setSelectedProduct(product)
-    setActiveTab('mood') // 履歴から選んだ場合も、タブの見た目をメインに戻す
+    setActiveTab('mood') 
   }
-  // 最初に役割選択画面を表示
+
+  // 1. 最初に役割選択画面を表示
   if (!role) {
     return <RoleSelectionPage onSelectRole={handleSelectRole} />
   }
 
-  // 管理者が選ばれた場合の仮画面
+  // 2. 管理者フロー（ログイン画面を挟む）
   if (role === 'admin') {
-    return <AdminPage onBack={() => setRole(null)} /> // 【書き換え】仮画面から本物のAdminPageに
+    // まだログインしていなければログイン画面を表示
+    if (!isAdminLoggedIn) {
+      return (
+        <AdminLoginPage
+          onLoginSuccess={() => setIsAdminLoggedIn(true)}
+          onBack={() => setRole(null)} // 戻るボタンで役割選択へ
+        />
+      )
+    }
+    // ログイン成功後は実際の管理者ページを表示
+    return (
+      <AdminPage 
+        onBack={() => {
+          setRole(null)
+          setIsAdminLoggedIn(false) // 戻る際にログアウト状態に戻す
+        }} 
+      />
+    )
   }
 
-  // ===== ユーザー向けのコンテンツ部分（タブによって切り替え） =====
+  // 3. ユーザー向けのコンテンツ部分（タブによって切り替え）
   const renderUserContent = () => {
-    // 履歴タブの場合
     if (activeTab === 'history') {
       return <HistoryPage user={currentUser} onChoose={handleChooseProduct} />
     }
 
-    // 気分タブの場合
     if (selectedProduct) {
       return <RecomendPage product={selectedProduct} />
     }
@@ -109,7 +102,6 @@ function AppRoot() {
 
   return (
    <div className="app-container">
-      {/* クラス名を付与してCSSで余白を管理します */}
       <div className="main-content">
         {renderUserContent()}
       </div>
